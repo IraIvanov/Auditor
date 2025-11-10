@@ -1,0 +1,4 @@
+0. Write tests
+0.1. Refactor event writer interface and reorganize auditor code
+1. create server, that will serve post/get requests
+2. on post request print json object, convert it into audit event structure and put it into sql database
