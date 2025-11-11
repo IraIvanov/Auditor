@@ -102,8 +102,6 @@ func (writer SqlWriter) WriteEvent(evt *AuditEvent) error {
 	return nil
 }
 
-//TODO: write function below, add ev_session_id, ev_req_id and attrs processing
-/* create select request */
 func CreateSelectReq(query *AuditEventQuery) (string, bool) {
 	statement_cnt := 0
 	query_req := "SELECT * FROM evt_table WHERE"
@@ -172,6 +170,52 @@ func CreateSelectReq(query *AuditEventQuery) (string, bool) {
 		}
 		query_req += ")"
 	}
+
+	if len(query.ReqId) > 0 {
+		if statement_cnt != 0 {
+			query_req += " AND"
+		}
+		query_req += " ("
+		for i, id := range query.ReqId {
+			if i != 0 {
+				query_req += " OR"
+			}
+			query_req += fmt.Sprintf(" (data->'req_id')::numeric = %d", id)
+		}
+		query_req += ")"
+	}
+
+	if len(query.SessionId) > 0 {
+		if statement_cnt != 0 {
+			query_req += " AND"
+		}
+		query_req += " ("
+		for i, id := range query.SessionId {
+			if i != 0 {
+				query_req += " OR"
+			}
+			query_req += fmt.Sprintf(" (data->'req_id')::numeric = %d", id)
+		}
+		query_req += ")"
+	}
+
+	if len(query.Attrs) > 0 {
+		for attr, strs := range query.Attrs {
+			if len(strs) > 0 {
+				if statement_cnt != 0 {
+					query_req += " AND"
+				}
+				query_req += " ("
+				for i, val := range strs {
+					if i != 0 {
+						query_req += " OR"
+					}
+					query_req += fmt.Sprintf(" data->'attributes'->'%s' ? '%s'", attr, val)
+				}
+			}
+		}
+		query_req += ")"
+	}
 	if statement_cnt == 0 {
 		return default_req, true
 	} else {
@@ -183,21 +227,38 @@ func CreateSelectReq(query *AuditEventQuery) (string, bool) {
 // For now just read random entry from table
 func (writer SqlWriter) ReadEvent(query *AuditEventQuery) ([]AuditEvent, error) {
 	log.Printf("Read event with query %v\n", *query)
-	//var evt AuditEvent
-	item := new(Item)
 	req, ok := CreateSelectReq(query)
 	if !ok {
 		log.Printf("Error while creating select req\n")
 		return nil, nil
 	}
 	log.Printf("Use request %s\n", req)
-	err := writer.db.QueryRow(req).Scan(&item.ID, &item.Evt)
+	rows, err := writer.db.Query(req)
 	if err != nil {
 		log.Printf("Error while querying %v\n", err)
 		return nil, err
 	}
 
-	return []AuditEvent{item.Evt}, nil
+	var events []AuditEvent
+	for rows.Next() {
+		item := new(Item)
+		err = rows.Scan(&item.ID, &item.Evt)
+		if err != nil {
+			log.Printf("Error while scanning row %v\n", err)
+			return nil, err
+		}
+		events = append(events, item.Evt)
+	}
+	return events, nil
+	//Old variant works only for querying first entry
+	/*
+			err := writer.db.QueryRow(req).Scan(&item.ID, &item.Evt)
+			if err != nil {
+				log.Printf("Error while querying %v\n", err)
+				return nil, err
+			}
+		return []AuditEvent{item.Evt}, nil
+	*/
 }
 
 func (writer SqlWriter) Write(data []byte) error {

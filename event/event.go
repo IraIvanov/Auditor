@@ -66,29 +66,22 @@ func EncodeEventQuery(query *AuditEventQuery) ([]byte, error) {
 	return payload, nil
 }
 
-/*
-func CheckStringList(l []interface{}) bool {
-	for _, el := range l {
-		if reflect.TypeOf(el).Kind() != reflect.String {
-			log.Printf("Error, %s:%v has invalid type", "ev_component", el)
-			return false
-		}
-	}
-	return true
-}
-*/
-
-func ConvertStrListToInt(l []string) []uint64 {
+func ConvertStrListToInt(l []string) ([]uint64, error) {
 	res := make([]uint64, 0)
-	for _, el := range l {
+	strs := make([]string, 0)
+	for _, str := range l {
+		strs = append(strs, strings.Split(str, ",")...)
+	}
+
+	for _, el := range strs {
 		num, err := strconv.Atoi(el)
 		if err != nil {
 			log.Printf("Error while converting str to int %v\n", err)
-			return nil
+			return nil, err
 		}
 		res = append(res, uint64(num))
 	}
-	return res
+	return res, nil
 }
 
 /* TODO: change errors to proper ones */
@@ -162,23 +155,26 @@ func ConvertMapToEventQuery(params map[string][]string) (*AuditEventQuery, error
 				query.Operation = append(query.Operation, strings.Split(str, ",")...)
 			}
 		case "ev_session_id":
-			sessions := ConvertStrListToInt(params[param])
-			if sessions == nil {
-				log.Printf("Error, can't parse %s\n", "ev_session_id")
+			sessions, err := ConvertStrListToInt(params[param])
+			if err != nil {
+				log.Printf("Error, can't parse %s:%v\n", "ev_session_id", err)
 				return nil, &json.InvalidUnmarshalError{}
 			}
 			query.SessionId = sessions
 		case "ev_req_id":
-			reqs := ConvertStrListToInt(params[param])
-			if reqs == nil {
-				log.Printf("Error, can't parse %s\n", "ev_req_id")
+			reqs, err := ConvertStrListToInt(params[param])
+			if err != nil {
+				log.Printf("Error, can't parse %s:%v\n", "ev_req_id", err)
 				return nil, &json.InvalidUnmarshalError{}
 			}
 			query.ReqId = reqs
 		default:
 			/* every unknown parameter serves as key in attributes map */
 			log.Printf("Assign %v %v %v", params[param], query.Attrs, param)
-			query.Attrs[param] = params[param]
+			query.Attrs[param] = make([]string, 0)
+			for _, str := range params[param] {
+				query.Attrs[param] = append(query.Attrs[param], strings.Split(str, ",")...)
+			}
 		}
 	}
 	return &query, nil
