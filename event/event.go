@@ -85,6 +85,7 @@ func ConvertStrListToInt(l []string) ([]uint64, error) {
 }
 
 /* TODO: change errors to proper ones */
+// allow empty values for optional fields, like it is done for attributes
 func ConvertMapToEventQuery(params map[string][]string) (*AuditEventQuery, error) {
 	var query AuditEventQuery
 	query.Attrs = make(map[string][]string)
@@ -173,14 +174,11 @@ func ConvertMapToEventQuery(params map[string][]string) (*AuditEventQuery, error
 			log.Printf("Assign %v %v %v", params[param], query.Attrs, param)
 			query.Attrs[param] = make([]string, 0)
 			for _, str := range params[param] {
-				query.Attrs[param] = append(query.Attrs[param], strings.Split(str, ",")...)
+				if str != "" {
+					query.Attrs[param] = append(query.Attrs[param], strings.Split(str, ",")...)
+				}
 			}
 		}
 	}
 	return &query, nil
-}
-
-type EventWriter interface {
-	WriteEvent(*AuditEvent) error                     /* write particular event */
-	ReadEvent(*AuditEventQuery) ([]AuditEvent, error) /* read event, with fields*/
 }
